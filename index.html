@@ -5,11 +5,12 @@
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
     <title>Registro de Clientes - Seguimiento</title>
     <style>
-        /* ESTILOS - Reemplaza estos colores con los de tu desarrollo anterior */
         :root {
-            --primary-color: #4A90E2; /* Color principal */
+            --primary-color: #4A90E2;
             --secondary-color: #f5f5f5;
             --text-color: #333;
+            --success-color: #28a745;
+            --danger-color: #dc3545;
             --border-radius: 8px;
         }
 
@@ -21,7 +22,7 @@
         }
 
         .container {
-            max-width: 1200px;
+            max-width: 1400px;
             margin: 0 auto;
             background: white;
             padding: 30px;
@@ -38,19 +39,19 @@
             margin-bottom: 30px;
         }
 
-        .full-width { grid-column: span 2; }
-
-        label { display: block; margin-bottom: 5px; font-weight: bold; }
+        label { display: block; margin-bottom: 5px; font-weight: bold; margin-top: 10px;}
+        label:first-child { margin-top: 0; }
         
-        textarea, input[type="text"], input[type="date"] {
+        textarea, input[type="text"], input[type="date"], select {
             width: 100%;
             padding: 10px;
             border: 1px solid #ccc;
             border-radius: 4px;
             box-sizing: border-box;
+            font-family: inherit;
         }
 
-        textarea { height: 120px; }
+        textarea { height: 150px; }
 
         .topic-selector {
             display: flex;
@@ -68,35 +69,48 @@
             transition: background 0.3s;
         }
 
-        button.active {
-            background-color: var(--primary-color);
-            color: white;
-        }
+        button.active { background-color: var(--primary-color); color: white; }
 
         button#btnGuardar {
-            background-color: #28a745;
+            background-color: var(--success-color);
             color: white;
             font-size: 1.1em;
             width: 100%;
             margin-top: 20px;
         }
 
+        .search-bar {
+            margin-bottom: 15px;
+            padding: 10px;
+            border: 2px solid var(--primary-color);
+            border-radius: 20px;
+            width: 100%;
+            max-width: 400px;
+        }
+
+        .table-container { overflow-x: auto; }
+        
         table {
             width: 100%;
             border-collapse: collapse;
-            margin-top: 30px;
+            margin-top: 10px;
+            font-size: 0.9em;
         }
 
         th, td {
             border: 1px solid #ddd;
-            padding: 12px;
+            padding: 10px;
             text-align: left;
+            vertical-align: middle;
         }
 
         th { background-color: var(--primary-color); color: white; }
         
-        /* Feedback visual */
+        .status-select { padding: 5px; border-radius: 4px; font-weight: bold; }
+        .date-alert { color: var(--danger-color); font-weight: bold; }
+        .date-ok { color: var(--success-color); font-weight: bold; }
         .loading { opacity: 0.5; pointer-events: none; }
+        .loader { text-align: center; margin: 20px; font-style: italic; color: #666; }
     </style>
 </head>
 <body>
@@ -111,171 +125,241 @@
         </div>
 
         <div>
+            <label>Agente Responsable:</label>
+            <input type="text" id="agentInput" placeholder="Nombre del agente">
+
             <label>Fecha de Reunión:</label>
             <input type="date" id="meetingDate">
 
-            <label style="margin-top: 15px;">Tema de Capacitación:</label>
+            <label>Tema de Capacitación:</label>
             <div class="topic-selector">
                 <button type="button" onclick="selectTopic('Primera capacitación', this)">Primera capacitación</button>
                 <button type="button" onclick="selectTopic('Segunda capacitación', this)">Segunda capacitación</button>
                 <input type="text" id="otherTopic" placeholder="Otra capacitación..." oninput="clearButtons()">
             </div>
 
-            <label style="margin-top: 15px;">Fecha de Seguimiento (Próximo Martes):</label>
+            <label>Fecha de Seguimiento (Próximo Martes):</label>
             <input type="date" id="followUpDate">
             
-            <label style="margin-top: 15px;">Notas:</label>
+            <label>Notas:</label>
             <input type="text" id="notes" placeholder="Notas adicionales...">
         </div>
     </div>
 
-    <button id="btnGuardar" onclick="processAndSave()">Agregar a la Tabla y Guardar en Drive</button>
+    <button id="btnGuardar" onclick="processAndSave()">Agregar y Guardar</button>
 
-    <h2>Tabla de Registros</h2>
-    <table id="resultTable">
-        <thead>
-            <tr>
-                <th>Nombre</th>
-                <th>Empresa</th>
-                <th>Email</th>
-                <th>Número</th>
-                <th>Fecha Reunión</th>
-                <th>Tema</th>
-                <th>Próximo Seguimiento</th>
-                <th>Notas</th> </tr>
-        </thead>
-        <tbody>
-            </tbody>
-    </table>
+    <h2 style="margin-top: 40px;">Tabla de Registros</h2>
+    
+    <input type="text" id="searchInput" class="search-bar" onkeyup="filterTable()" placeholder="🔍 Buscar por nombre, empresa, email o agente...">
+
+    <div id="loader" class="loader">Cargando datos desde Drive...</div>
+    
+    <div class="table-container">
+        <table id="resultTable">
+            <thead>
+                <tr>
+                    <th>Nombre</th>
+                    <th>Empresa</th>
+                    <th>Email</th>
+                    <th>Número</th>
+                    <th>Fecha Reunión</th>
+                    <th>Tema</th>
+                    <th>Próximo Seguimiento</th>
+                    <th>Notas</th>
+                    <th>Agente</th> <th>Estado</th>
+                </tr>
+            </thead>
+            <tbody>
+                </tbody>
+        </table>
+    </div>
 </div>
 
 <script>
     // --- CONFIGURACIÓN ---
-    // ¡IMPORTANTE! PEGA AQUÍ LA URL DE TU WEB APP DE APPS SCRIPT
+    // Asegúrate de actualizar la URL si al volver a implementar cambió
     const SCRIPT_URL = 'https://script.google.com/macros/s/AKfycbzs0wkU4sxWSYZYEAsCNMcZeJVMaf2E8bxRJNVlwbgsdJMW0VbLUVTp77wHP_AXNSny/exec'; 
 
-    // --- INICIALIZACIÓN ---
+    let allData = [];
+
     window.onload = function() {
         setTodayDate();
         setNextTuesday();
+        loadDataFromSheet();
     };
 
-    // Establecer fecha de hoy por defecto
     function setTodayDate() {
-        const today = new Date();
-        document.getElementById('meetingDate').valueAsDate = today;
+        document.getElementById('meetingDate').valueAsDate = new Date();
     }
 
-    // Calcular y establecer el próximo martes
     function setNextTuesday() {
         const d = new Date();
         const day = d.getDay();
-        // 0=Domingo, 1=Lunes, 2=Martes...
-        // Calcular días hasta el próximo martes (2)
         let diff = 2 - day;
-        if (diff <= 0) diff += 7; // Si es martes o después, ir al siguiente
+        if (diff <= 0) diff += 7;
         d.setDate(d.getDate() + diff);
         document.getElementById('followUpDate').valueAsDate = d;
     }
 
-    // Lógica de botones de tema
     let selectedTopic = "";
-
     function selectTopic(topic, btnElement) {
         selectedTopic = topic;
-        document.getElementById('otherTopic').value = ""; // Limpiar campo de texto
-        
-        // Visual updates
+        document.getElementById('otherTopic').value = "";
         document.querySelectorAll('.topic-selector button').forEach(b => b.classList.remove('active'));
         btnElement.classList.add('active');
     }
-
     function clearButtons() {
         selectedTopic = "";
         document.querySelectorAll('.topic-selector button').forEach(b => b.classList.remove('active'));
     }
 
-    // --- PROCESAMIENTO PRINCIPAL ---
-    function processAndSave() {
-        const rawText = document.getElementById('rawInfo').value.trim();
-        if (!rawText) { alert("Por favor pega la información del cliente"); return; }
-
-        const lines = rawText.split('\n').map(line => line.trim()).filter(line => line !== '');
-
-        // Extracción segura de datos (evita errores si faltan líneas)
-        const nombre = lines[0] || "";
-        // Remover 'label_important' del inicio de la empresa
-        const empresa = (lines[1] || "").replace(/^label_important/, '').trim();
-        const email = lines[2] || "";
-        const numero = lines[3] || "";
-
-        // Obtener otros campos
-        const fechaReunion = document.getElementById('meetingDate').value;
-        const temaFinal = document.getElementById('otherTopic').value || selectedTopic || "Sin tema";
-        const fechaSeguimiento = document.getElementById('followUpDate').value;
-        const notas = document.getElementById('notes').value;
-
-        // Crear objeto de datos
-        const rowData = {
-            nombre,
-            empresa,
-            email,
-            numero,
-            fechaReunion,
-            tema: temaFinal,
-            proximoSeguimiento: fechaSeguimiento,
-            notas
-        };
-
-        // 1. Agregar a la Tabla Visual (HTML)
-        addToTable(rowData);
-
-        // 2. Guardar en Google Sheets
-        saveToGoogleSheets(rowData);
-    }
-
-    function addToTable(data) {
-        const table = document.getElementById('resultTable').getElementsByTagName('tbody')[0];
-        const newRow = table.insertRow();
-        
-        Object.values(data).forEach(text => {
-            const cell = newRow.insertCell();
-            cell.textContent = text;
+    // --- CARGAR DATOS ---
+    function loadDataFromSheet() {
+        fetch(SCRIPT_URL)
+        .then(response => response.json())
+        .then(data => {
+            allData = data;
+            renderTable(allData);
+            document.getElementById('loader').style.display = 'none';
+        })
+        .catch(error => {
+            console.error('Error cargando:', error);
+            document.getElementById('loader').innerText = "Error al conectar con Google Sheets.";
         });
     }
 
-    function saveToGoogleSheets(data) {
-        if (SCRIPT_URL === 'TU_URL_DE_APPS_SCRIPT_AQUI') {
-            alert("Datos mostrados en tabla, pero NO guardados en Drive.\n\nFalta configurar la URL del Apps Script en el código.");
+    // --- RENDERIZAR TABLA ---
+    function renderTable(dataArray) {
+        const tbody = document.getElementById('resultTable').getElementsByTagName('tbody')[0];
+        tbody.innerHTML = ""; 
+
+        dataArray.forEach((row, index) => {
+            // Estructura row: 
+            // 0:Nombre, 1:Empresa, 2:Email, 3:Numero, 4:FechaR, 5:Tema, 
+            // 6:ProxSeg, 7:Notas, 8:Agente, 9:Estado
+            
+            const tr = tbody.insertRow();
+            
+            // Campos básicos (0 al 5)
+            for(let i=0; i<=5; i++) {
+                tr.insertCell().textContent = row[i];
+            }
+
+            // 6: Fecha Próximo Seguimiento
+            const dateCell = tr.insertCell();
+            const dateStr = row[6] ? new Date(row[6]).toISOString().split('T')[0] : "";
+            dateCell.textContent = dateStr;
+            const status = row[9] || "Pendiente"; // El estado ahora está en indice 9
+            checkDateColor(dateCell, dateStr, status);
+
+            // 7: Notas
+            tr.insertCell().textContent = row[7];
+
+            // 8: Agente (NUEVO)
+            tr.insertCell().textContent = row[8] || "-";
+
+            // 9: Estado
+            const statusCell = tr.insertCell();
+            const select = document.createElement('select');
+            select.className = 'status-select';
+            select.add(new Option("Pendiente", "Pendiente"));
+            select.add(new Option("Completado", "Completado"));
+            select.value = status; 
+            
+            select.onchange = function() {
+                updateStatus(index, this.value, dateCell, dateStr);
+            };
+            statusCell.appendChild(select);
+        });
+    }
+
+    function checkDateColor(cell, dateStr, status) {
+        cell.className = "";
+        if (status === "Completado") {
+            cell.classList.add('date-ok');
             return;
         }
+        if (!dateStr) return;
+        const targetDate = new Date(dateStr);
+        const today = new Date();
+        today.setHours(0,0,0,0);
+        targetDate.setHours(0,0,0,0);
+        targetDate.setDate(targetDate.getDate() + 1); 
+
+        if (targetDate <= today) {
+            cell.classList.add('date-alert');
+        }
+    }
+
+    // --- GUARDAR ---
+    function processAndSave() {
+        const rawText = document.getElementById('rawInfo').value.trim();
+        const agentName = document.getElementById('agentInput').value.trim();
+
+        if (!rawText) { alert("Por favor pega la información del cliente"); return; }
+        if (!agentName) { alert("Por favor ingresa el nombre del Agente"); return; }
+
+        const lines = rawText.split('\n').map(line => line.trim()).filter(line => line !== '');
+        
+        const rowData = {
+            nombre: lines[0] || "",
+            empresa: (lines[1] || "").replace(/^label_important/, '').trim(),
+            email: lines[2] || "",
+            numero: lines[3] || "",
+            fechaReunion: document.getElementById('meetingDate').value,
+            tema: document.getElementById('otherTopic').value || selectedTopic || "Sin tema",
+            proximoSeguimiento: document.getElementById('followUpDate').value,
+            notas: document.getElementById('notes').value,
+            agente: agentName // Nuevo dato
+        };
 
         const btn = document.getElementById('btnGuardar');
-        const originalText = btn.innerText;
         btn.innerText = "Guardando...";
         btn.classList.add('loading');
 
         fetch(SCRIPT_URL, {
             method: 'POST',
-            mode: 'no-cors', // Necesario para Apps Script
-            headers: {
-                'Content-Type': 'application/json',
-            },
-            body: JSON.stringify(data)
+            mode: 'no-cors',
+            headers: {'Content-Type': 'application/json'},
+            body: JSON.stringify(rowData)
         })
         .then(() => {
-            alert("¡Guardado exitosamente en la hoja de cálculo!");
-            // Opcional: Limpiar campos
-            // document.getElementById('rawInfo').value = "";
+            alert("Guardado exitosamente.");
+            setTimeout(loadDataFromSheet, 1000); 
+            document.getElementById('rawInfo').value = "";
+            document.getElementById('notes').value = "";
         })
-        .catch(error => {
-            console.error('Error:', error);
-            alert("Error al guardar en Drive.");
-        })
+        .catch(err => alert("Error al guardar"))
         .finally(() => {
-            btn.innerText = originalText;
+            btn.innerText = "Agregar y Guardar";
             btn.classList.remove('loading');
         });
+    }
+
+    function updateStatus(rowIndex, newStatus, dateCell, dateStr) {
+        checkDateColor(dateCell, dateStr, newStatus);
+        fetch(SCRIPT_URL, {
+            method: 'POST',
+            mode: 'no-cors',
+            headers: {'Content-Type': 'application/json'},
+            body: JSON.stringify({
+                action: "updateStatus",
+                rowIndex: rowIndex,
+                status: newStatus
+            })
+        }).catch(err => console.error("Error actualizando estado", err));
+    }
+
+    function filterTable() {
+        const query = document.getElementById('searchInput').value.toLowerCase();
+        const filteredData = allData.filter(row => {
+            // Buscamos en Nombre(0), Empresa(1), Email(2) o Agente(8)
+            return (row[0] && row[0].toLowerCase().includes(query)) ||
+                   (row[1] && row[1].toLowerCase().includes(query)) ||
+                   (row[2] && row[2].toLowerCase().includes(query)) ||
+                   (row[8] && row[8].toLowerCase().includes(query));
+        });
+        renderTable(filteredData);
     }
 </script>
 
